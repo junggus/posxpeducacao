@@ -1,0 +1,98 @@
+#Trabalho Prático Módulo 2 Bootcamp Cientista de Dados
+
+
+#Preparando o ambiente
+
+!pip install pyspark
+from pyspark.sql import *
+spark = (SparkSession.builder
+         .appName("Map")
+         .getOrCreate())
+#Lembrar de fazer o upload do arquivo .csv antes!
+dados = spark.read.csv('all_stocks_5yr.csv', sep=',', header = True)
+
+#Questão 1
+#Quantos registros há na planilha?
+dados.count()
+
+#Questão 2
+#Quantos registros há na planilha para a ação da Apple (AAPL)?
+from pyspark.sql.functions import col
+dados.filter(col("Name") == "AAPL").count()
+
+#Questão 3
+#Quantas empresas distintas têm registros nessa planilha?
+dados.select("Name").distinct().count()
+
+#Questão 4
+#Com qual frequência o preço de uma ação no fechamento é maior do que o preço na abertura?
+dados.filter(
+    col("close") > col("open")
+).count()/dados.count()
+
+#Questão 5
+#Qual o maior valor das ações da Apple (AAPL) na história?
+aapl = dados.filter(col("Name") == "AAPL")
+aapl.show()
+import pyspark.sql.functions as F
+aapl.select(F.max(col("high"))).show()
+
+#Questão 6
+#Qual ação tem a maior volatilidade? Uma forma é medir o desvio-padrão do preço de fechamento de cada ação e considerar a ação de maior desvio-padrão.
+volatilidade1 = dados.groupby(col("Name")).agg(F.stddev(col("open")))
+volatilidade2 = dados.groupby(col("Name")).agg(F.stddev(col("high")))
+volatilidade3 = dados.groupby(col("Name")).agg(F.stddev(col("low")))
+volatilidade4 = dados.groupby(col("Name")).agg(F.stddev(col("close")))
+volatilidade1.orderBy(F.desc("stddev_samp(open)")).show()
+volatilidade2.orderBy(F.desc("stddev_samp(high)")).show()
+volatilidade3.orderBy(F.desc("stddev_samp(low)")).show()
+volatilidade4.orderBy(F.desc("stddev_samp(close)")).show()
+
+#Questão 7
+#Qual o dia com maior volume total de negociação da bolsa?
+volume = dados.groupBy(col("date")).agg(F.sum(col("volume"))).orderBy(F.desc("sum(volume)")).show()
+
+#Questão 8
+#Qual a ação mais negociada da bolsa, em volume de transações?
+dados.groupBy(col("Name")).agg(F.sum(col("volume"))).orderBy(F.desc("sum(volume)")).show()
+
+#Questão 9
+#Quantas ações começam com a letra “A”?
+nomes_empresas = dados.select("Name").distinct().rdd.flatMap(lambda x: x).collect()
+spark = SparkSession.builder.appName("NomesEmpresas").getOrCreate()
+rdd = spark.sparkContext.parallelize(nomes_empresas)
+dados_nomes_empresas = rdd.map(lambda x: Row(Name=x)).toDF()
+dados_nomes_empresas.show()
+dados_nomes_empresas.filter(col("NAME").startswith("A")).count()
+
+#Questão 10
+#Com qual frequência o preço mais alto do dia da ação também é o preço de fechamento?
+dados.filter(
+    col("close") == col("high")
+).count()/dados.count()
+
+
+#Questão 11
+#Em qual dia a ação da Apple mais subiu entre a abertura e o fechamento, de forma absoluta?
+subida = dados.withColumn("difference_high_open", col("high") - col("open"))
+subida.show()
+import pyspark.sql.functions as F
+subida = subida.filter(col("Name") == "AAPL")
+subida.orderBy(F.desc("difference_high_open")).show()
+
+#Questão 12
+#Em média, qual o volume diário de transações das ações da AAPL?
+dados.filter(col("Name") == "AAPL").select(F.mean('volume')).show()
+
+#Questão 13
+#Quantas ações tem 1, 2, 3, 4 e 5 caracteres em seu nome, respectivamente?
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import length, count
+spark2 = SparkSession.builder.appName("ContagemCaracteres").getOrCreate()
+dados_com_contagem = dados_nomes_empresas.withColumn("num_caracteres", length("Name"))
+contagem_por_num_caracteres = dados_com_contagem.groupBy("num_caracteres").agg(count("*").alias("contagem"))
+contagem_por_num_caracteres.show()
+
+#Questão 14
+#Qual a ação menos negociada da bolsa, em volume de transações?
+dados.groupBy(col("Name")).agg(F.sum(col("volume"))).orderBy("sum(volume)").show()
